@@ -1,0 +1,12 @@
+[package]
+name = "rs-category"
+version = "0.1.0"
+authors = ["M Farkas-Dyck <strake888@gmail.com>"]
+edition = "2018"
+description = "Categorical traits"
+license = "MIT OR Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+void = { version = "1", default-features = false }
