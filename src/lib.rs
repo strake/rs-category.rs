@@ -148,16 +148,41 @@ fn map_array_with_ix_mut<A, B, const N: usize>(mut f: impl FnMut(A, usize) -> B,
 
 #[inline]
 fn traverse_array_with_ix_mut<A, B, P: Pointed + Applicable, F: FnMut(A, usize) -> P::H<B>, const N: usize>(mut f: F, a: [A; N]) -> P::H<[B; N]> { unsafe {
+    let a = mem::ManuallyDrop::new(a);
+    let mut bsp = P::point(mem::MaybeUninit::<[B; N]>::uninit());
+    for k in 0..N {
+        let bp = f(ptr::read(&a[k]), k);
+        bsp = P::liftA2(|b, mut bs| {
+            ptr::write((bs.as_mut_ptr() as *mut B).wrapping_add(k), b);
+            bs
+        }, bp, bsp);
+    }
+    P::map(|x| x.assume_init(), bsp)
+} }
+
+#[inline]
+fn zip_arrays_with_ix_mut<A, B, C, F: FnMut(A, B, usize) -> C, const N: usize>(mut f: F, a: [A; N], b: [B; N]) -> [C; N] { unsafe {
         let a = mem::ManuallyDrop::new(a);
-        let mut bsp = P::point(mem::MaybeUninit::<[B; N]>::uninit());
-        for k in 0..N {
-            let bp = f(ptr::read(&a[k]), k);
-            bsp = P::liftA2(|b, mut bs| {
-                ptr::write((bs.as_mut_ptr() as *mut B).wrapping_add(k), b);
-                bs
-            }, bp, bsp);
-        }
-        P::map(|x| x.assume_init(), bsp)
+        let b = mem::ManuallyDrop::new(b);
+    let mut c = mem::MaybeUninit::<[C; N]>::uninit();
+    for k in 0..N { ptr::write((c.as_mut_ptr() as *mut C).wrapping_add(k), f(ptr::read(&a[k]), ptr::read(&b[k]), k)); }
+    c.assume_init()
+} }
+
+#[allow(unused)]
+#[inline]
+fn zipA_arrays_with_ix_mut<A, B, C, P: Pointed + Applicable, F: FnMut(A, B, usize) -> P::H<C>, const N: usize>(mut f: F, a: [A; N], b: [B; N]) -> P::H<[C; N]> { unsafe {
+    let a = mem::ManuallyDrop::new(a);
+    let b = mem::ManuallyDrop::new(b);
+    let mut csp = P::point(mem::MaybeUninit::<[C; N]>::uninit());
+    for k in 0..N {
+        let cp = f(ptr::read(&a[k]), ptr::read(&b[k]), k);
+        csp = P::liftA2(|c, mut cs| {
+            ptr::write((cs.as_mut_ptr() as *mut C).wrapping_add(k), c);
+            cs
+        }, cp, csp);
+    }
+    P::map(|x| x.assume_init(), csp)
 } }
 
 pub struct OptionW(Void);
@@ -273,10 +298,56 @@ pub trait Semigroup {
     fn combine(_: Self, _: Self) -> Self;
 }
 
-impl Semigroup for () {
+impl<A: Semigroup, const N: usize> Semigroup for [A; N] {
     #[inline]
-    fn combine((): (), (): ()) -> () { () }
+    fn combine(a: Self, b: Self) -> Self { zip_arrays_with_ix_mut(|a, b, _| A::combine(a, b), a, b) }
 }
+
+pub trait Monoid {
+    const empty: Self;
+}
+
+impl<A: Monoid, const N: usize> Monoid for [A; N] {
+    const empty: Self = [A::empty; N];
+}
+
+macro_rules! impl_Semigroup_etc_tuple {
+    ($($A:ident, $n:tt),*) => {
+        impl<$($A: Semigroup),*> Semigroup for ($($A),*) {
+            #[allow(unused_variables)]
+            #[inline]
+            fn combine(a: Self, b: Self) -> Self { ($($A::combine(a.$n, b.$n)),*) }
+        }
+        impl<$($A: Monoid),*> Monoid for ($($A),*) {
+            const empty: Self = ($($A::empty),*);
+        }
+    }
+}
+
+pub trait Group {
+    fn invert(_: Self) -> Self;
+}
+
+impl<A: Group, const N: usize> Group for [A; N] {
+    #[inline]
+    fn invert(a: Self) -> Self { map_array_with_ix_mut(|a, _| A::invert(a), a) }
+}
+
+impl_Semigroup_etc_tuple!();
+impl_Semigroup_etc_tuple!(A, 0, B, 1);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5, G, 6);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5, G, 6, H, 7);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5, G, 6, H, 7, I, 8);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5, G, 6, H, 7, I, 8, J, 9);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5, G, 6, H, 7, I, 8, J, 9, K, 10);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5, G, 6, H, 7, I, 8, J, 9, K, 10, L, 11);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5, G, 6, H, 7, I, 8, J, 9, K, 10, L, 11, M, 12);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5, G, 6, H, 7, I, 8, J, 9, K, 10, L, 11, M, 12, N, 13);
+impl_Semigroup_etc_tuple!(A, 0, B, 1, C, 2, D, 3, E, 4, F, 5, G, 6, H, 7, I, 8, J, 9, K, 10, L, 11, M, 12, N, 13, O, 14);
 
 /// Sugar for doing monadically
 ///
