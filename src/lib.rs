@@ -253,6 +253,11 @@ impl Traversable for OptionW {
     } }
 }
 
+impl Pointed for OptionW {
+    #[inline]
+    fn point<A>(a: A) -> Option<A> { Some(a) }
+}
+
 pub struct ResultW<E>(PhantomData<E>, Void);
 
 impl<E> H1 for ResultW<E> {
@@ -292,6 +297,11 @@ impl<E: Semigroup> ApplicableMut for ResultW<E> {
 impl<E: Semigroup> Applicable for ResultW<E> {
     #[inline]
     fn liftA2<A, B, C>(f: impl Fn(A, B) -> C, a: Result<A, E>, b: Result<B, E>) -> Result<C, E> { Self::liftA2_once(f, a, b) }
+}
+
+impl<E> Pointed for ResultW<E> {
+    #[inline]
+    fn point<A>(a: A) -> Result<A, E> { Ok(a) }
 }
 
 pub trait Semigroup {
