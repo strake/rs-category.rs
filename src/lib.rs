@@ -303,13 +303,7 @@ impl<A: Semigroup, const N: usize> Semigroup for [A; N] {
     fn combine(a: Self, b: Self) -> Self { zip_arrays_with_ix_mut(|a, b, _| A::combine(a, b), a, b) }
 }
 
-pub trait Monoid {
-    const empty: Self;
-}
-
-impl<A: Monoid, const N: usize> Monoid for [A; N] {
-    const empty: Self = [A::empty; N];
-}
+// We not define `Monoid`, for we can rather use `Default + Semigroup`.
 
 macro_rules! impl_Semigroup_etc_tuple {
     ($($A:ident, $n:tt),*) => {
@@ -318,20 +312,21 @@ macro_rules! impl_Semigroup_etc_tuple {
             #[inline]
             fn combine(a: Self, b: Self) -> Self { ($($A::combine(a.$n, b.$n)),*) }
         }
-        impl<$($A: Monoid),*> Monoid for ($($A),*) {
-            const empty: Self = ($($A::empty),*);
-        }
     }
 }
 
-pub trait Group {
+/*
+pub trait Group: Default + Semigroup {
     fn invert(_: Self) -> Self;
 }
+
+// stupid standard library has no general impl Default for arrays.
 
 impl<A: Group, const N: usize> Group for [A; N] {
     #[inline]
     fn invert(a: Self) -> Self { map_array_with_ix_mut(|a, _| A::invert(a), a) }
 }
+*/
 
 impl_Semigroup_etc_tuple!();
 impl_Semigroup_etc_tuple!(A, 0, B, 1);
